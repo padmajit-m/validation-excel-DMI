@@ -5,11 +5,19 @@ import json
 
 # Load mapping file
 def load_mapping_file(mapping_file_path):
-    with open(mapping_file_path, 'r') as f:
-        return json.load(f)
+    try:
+        with open(mapping_file_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        st.error(f"Error loading mapping file: {e}")
+        return None
 
 # Validate header and values
 def validate_excel(file, mapping):
+    if mapping is None:
+        st.error("Mapping file is not loaded correctly.")
+        return
+
     # Load Excel file
     try:
         df = pd.read_excel(file, engine='openpyxl')
@@ -22,6 +30,10 @@ def validate_excel(file, mapping):
     errors = []
 
     # Check for missing headers
+    if 'properties' not in mapping:
+        st.error("Invalid mapping file: 'properties' key not found.")
+        return
+
     mapping_headers = {field['flatFileHeader'] for field in mapping['properties'].values()}
     missing_headers = [header for header in mapping_headers if header not in headers]
     if missing_headers:
