@@ -2,17 +2,17 @@ import streamlit as st
 import pandas as pd
 import re
 import json
+from io import StringIO
 
-# Load mapping file
-def load_mapping_file(mapping_file_path):
+def load_mapping_file(mapping_file):
     try:
-        with open(mapping_file_path, 'r') as f:
-            return json.load(f)
+        # Read the uploaded JSON file
+        mapping_data = mapping_file.read()
+        return json.loads(mapping_data)
     except Exception as e:
         st.error(f"Error loading mapping file: {e}")
         return None
 
-# Validate header and values
 def validate_excel(file, mapping):
     if mapping is None:
         st.error("Mapping file is not loaded correctly.")
@@ -63,9 +63,11 @@ def validate_excel(file, mapping):
 
 # Streamlit UI
 st.title('Excel Validation Tool')
+
+# File uploaders for mapping file and Excel file
+mapping_file = st.file_uploader("Upload your JSON mapping file", type="json")
 uploaded_file = st.file_uploader("Upload your Excel file", type="xlsx")
 
-if uploaded_file:
-    mapping_file_path = 'loan_create_or_update.json'  # Ensure this path is correct and file is included in your repository
-    mapping = load_mapping_file(mapping_file_path)
+if mapping_file and uploaded_file:
+    mapping = load_mapping_file(mapping_file)
     validate_excel(uploaded_file, mapping)
