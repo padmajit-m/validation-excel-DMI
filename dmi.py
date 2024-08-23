@@ -18,8 +18,8 @@ def validate_excel(file, mapping):
         st.error("Mapping file is not loaded correctly.")
         return
 
-    # Load Excel file
     try:
+        # Load Excel file
         df = pd.read_excel(file, engine='openpyxl')
     except Exception as e:
         st.error(f"Error loading Excel file: {e}")
@@ -30,11 +30,19 @@ def validate_excel(file, mapping):
     errors = []
 
     # Check for missing headers
-    if 'properties' not in mapping:
-        st.error("Invalid mapping file: 'properties' key not found.")
+    try:
+        if 'properties' not in mapping:
+            st.error("Invalid mapping file: 'properties' key not found.")
+            return
+
+        mapping_headers = {field['flatFileHeader'] for field in mapping['properties'].values()}
+    except KeyError as e:
+        st.error(f"KeyError: {e}. Ensure the mapping file has the correct structure and includes 'flatFileHeader'.")
+        return
+    except Exception as e:
+        st.error(f"Unexpected error while processing mapping file: {e}")
         return
 
-    mapping_headers = {field['flatFileHeader'] for field in mapping['properties'].values()}
     missing_headers = [header for header in mapping_headers if header not in headers]
     if missing_headers:
         errors.append(f"Missing headers: {', '.join(missing_headers)}")
