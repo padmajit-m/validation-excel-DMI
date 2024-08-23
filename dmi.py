@@ -8,10 +8,15 @@ def load_mapping_file(mapping_file):
     try:
         # Read the uploaded JSON file
         mapping_data = mapping_file.read()
-        return json.loads(mapping_data)
+        mapping_json = json.loads(mapping_data)
+        st.write("Mapping file loaded successfully.")
+        st.write(mapping_json)  # Debugging: Show the mapping file structure
+        return mapping_json
+    except json.JSONDecodeError as e:
+        st.error(f"Error decoding JSON: {e}")
     except Exception as e:
         st.error(f"Error loading mapping file: {e}")
-        return None
+    return None
 
 def validate_excel(file, mapping):
     if mapping is None:
@@ -21,28 +26,35 @@ def validate_excel(file, mapping):
     try:
         # Load Excel file
         df = pd.read_excel(file, engine='openpyxl')
+        st.write("Excel file loaded successfully.")
+        st.write(df.head())  # Debugging: Show first few rows of the Excel file
     except Exception as e:
         st.error(f"Error loading Excel file: {e}")
         return
 
-    # Extract headers
-    headers = df.columns.tolist()
-    errors = []
-
-    # Check for missing headers
     try:
+        # Check if 'properties' key is present
         if 'properties' not in mapping:
             st.error("Invalid mapping file: 'properties' key not found.")
             return
-
+        
+        # Extract headers from mapping
         mapping_headers = {field['flatFileHeader'] for field in mapping['properties'].values()}
+        st.write("Mapping headers extracted successfully.")
+        st.write(mapping_headers)  # Debugging: Show the extracted headers
+        
     except KeyError as e:
-        st.error(f"KeyError: {e}. Ensure the mapping file has the correct structure and includes 'flatFileHeader'.")
+        st.error(f"KeyError: {e}. Ensure the mapping file includes 'flatFileHeader'.")
         return
     except Exception as e:
         st.error(f"Unexpected error while processing mapping file: {e}")
         return
 
+    # Extract headers from Excel
+    headers = df.columns.tolist()
+    errors = []
+
+    # Check for missing headers
     missing_headers = [header for header in mapping_headers if header not in headers]
     if missing_headers:
         errors.append(f"Missing headers: {', '.join(missing_headers)}")
