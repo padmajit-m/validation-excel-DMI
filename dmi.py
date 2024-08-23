@@ -1,15 +1,15 @@
 import streamlit as st
 import pandas as pd
 import re
-from openpyxl import load_workbook
 
-# Check for openpyxl
-try:
-    import openpyxl
-except ImportError:
-    st.error("openpyxl is not installed.")
-    st.stop()
+# Load mapping file
+def load_mapping_file(mapping_file_path):
+    # Load the mapping file (assuming JSON format here)
+    import json
+    with open(mapping_file_path, 'r') as f:
+        return json.load(f)
 
+# Validate header and values
 def validate_excel(file, mapping):
     # Load Excel file
     try:
@@ -18,39 +18,43 @@ def validate_excel(file, mapping):
         st.error(f"Error loading Excel file: {e}")
         return
 
+    # Extract headers
+    headers = df.columns.tolist()
     errors = []
 
-    # Validate headers
-    for header in df.columns:
-        if header not in mapping:
-            errors.append(f"Invalid header: {header}")
+    # Check for missing headers
+    mapping_headers = {field['flatFileHeader'] for field in mapping['properties'].values()}
+    missing_headers = [header for header in mapping_headers if header not in headers]
+    if missing_headers:
+        errors.append(f"Missing headers: {', '.join(missing_headers)}")
 
-    # Additional validation logic based on the mapping file
-    for index, row in df.iterrows():
-        for key, value in mapping.items():
-            if key in row:
-                # Validate based on type and pattern
-                if value.get('type') == 'string':
-                    pattern = value.get('pattern')
-                    if pattern and not re.match(pattern, str(row[key])):
-                        errors.append(f"Invalid value in field '{key}': {row[key]}")
+    # Check for extra headers
+    extra_headers = [header for header in headers if header not in mapping_headers]
+    if extra_headers:
+        errors.append(f"Extra headers: {', '.join(extra_headers)}")
+
+    # Check for incorrect values in the fields
+    for header in headers:
+        if header in mapping_headers:
+            field_mapping = next(field for key, field in mapping['properties'].items() if field['flatFileHeader'] == header)
+            pattern = field_mapping.get('pattern', None)
+            if pattern:
+                regex = re.compile(pattern)
+                for i, value in enumerate(df[header]):
+                    if pd.notna(value) and not regex.match(str(value)):
+                        errors.append(f"Invalid value '{value}' in header '{header}' at row {i+1}. Expected format: {pattern}")
 
     if errors:
-        st.error("Validation errors found:")
         for error in errors:
-            st.write(error)
+            st.error(error)
     else:
-        st.success("Validation passed.")
+        st.success("All headers and values are correct.")
 
 # Streamlit UI
 st.title('Excel Validation Tool')
 uploaded_file = st.file_uploader("Upload your Excel file", type="xlsx")
-mapping_file = st.file_uploader("Upload the mapping file", type="json")
 
-if uploaded_file and mapping_file:
-    try:
-        import json
-        mapping = json.load(mapping_file)
-        validate_excel(uploaded_file, mapping)
-    except Exception as e:
-        st.error(f"Error processing files: {e}")
+if uploaded_file:
+    mapping_file_path = 'path/to/your/mapping_file.json'  # Replace with actual path
+    mapping = load_mapping_file(mapping_file_path)
+    validate_excel(uploaded_file, mapping)
