@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import re
 import json
-from io import StringIO
 
 def load_mapping_file(mapping_file):
     try:
@@ -10,13 +9,22 @@ def load_mapping_file(mapping_file):
         mapping_data = mapping_file.read()
         mapping_json = json.loads(mapping_data)
         st.write("Mapping file loaded successfully.")
-        st.write(mapping_json)  # Debugging: Show the mapping file structure
+        st.write("Mapping JSON:", mapping_json)  # Debugging: Show the mapping file content
         return mapping_json
     except json.JSONDecodeError as e:
         st.error(f"Error decoding JSON: {e}")
     except Exception as e:
         st.error(f"Error loading mapping file: {e}")
     return None
+
+def extract_flat_file_headers(properties, parent_key=''):
+    headers = []
+    for key, value in properties.items():
+        if 'flatFileHeader' in value:
+            headers.append(value['flatFileHeader'])
+        if 'properties' in value:
+            headers.extend(extract_flat_file_headers(value['properties'], parent_key + key + '.'))
+    return headers
 
 def validate_excel(file, mapping):
     if mapping is None:
@@ -27,7 +35,7 @@ def validate_excel(file, mapping):
         # Load Excel file
         df = pd.read_excel(file, engine='openpyxl')
         st.write("Excel file loaded successfully.")
-        st.write(df.head())  # Debugging: Show first few rows of the Excel file
+        st.write("Excel Data:", df.head())  # Debugging: Show first few rows of the Excel file
     except Exception as e:
         st.error(f"Error loading Excel file: {e}")
         return
@@ -39,9 +47,15 @@ def validate_excel(file, mapping):
             return
         
         # Extract headers from mapping
-        mapping_headers = {field['flatFileHeader'] for field in mapping['properties'].values()}
+        properties = mapping['properties']
+        if not isinstance(properties, dict):
+            st.error("'properties' should be a dictionary.")
+            return
+        
+        # Extract headers from the nested properties
+        mapping_headers = extract_flat_file_headers(properties)
         st.write("Mapping headers extracted successfully.")
-        st.write(mapping_headers)  # Debugging: Show the extracted headers
+        st.write("Mapping Headers:", mapping_headers)  # Debugging: Show the extracted headers
         
     except KeyError as e:
         st.error(f"KeyError: {e}. Ensure the mapping file includes 'flatFileHeader'.")
@@ -67,19 +81,40 @@ def validate_excel(file, mapping):
     # Check for incorrect values in the fields
     for header in headers:
         if header in mapping_headers:
-            field_mapping = next(field for key, field in mapping['properties'].items() if field['flatFileHeader'] == header)
-            pattern = field_mapping.get('pattern', None)
-            if pattern:
-                regex = re.compile(pattern)
-                for i, value in enumerate(df[header]):
-                    if pd.notna(value) and not regex.match(str(value)):
-                        errors.append(f"Invalid value '{value}' in header '{header}' at row {i+1}. Expected format: {pattern}")
+            # Find the field mapping for the header
+            field_mapping = None
+            for key, value in properties.items():
+                if 'properties' in value:
+                    field_mapping = find_field_mapping(value['properties'], header)
+                    if field_mapping:
+                        break
+                elif 'flatFileHeader' in value and value['flatFileHeader'] == header:
+                    field_mapping = value
+                    break
+            
+            if field_mapping:
+                pattern = field_mapping.get('pattern', None)
+                if pattern:
+                    regex = re.compile(pattern)
+                    for i, value in enumerate(df[header]):
+                        if pd.notna(value) and not regex.match(str(value)):
+                            errors.append(f"Invalid value '{value}' in header '{header}' at row {i+1}. Expected format: {pattern}")
 
     if errors:
         for error in errors:
             st.error(error)
     else:
         st.success("All headers and values are correct.")
+
+def find_field_mapping(properties, header):
+    for key, value in properties.items():
+        if 'flatFileHeader' in value and value['flatFileHeader'] == header:
+            return value
+        if 'properties' in value:
+            result = find_field_mapping(value['properties'], header)
+            if result:
+                return result
+    return None
 
 # Streamlit UI
 st.title('Excel Validation Tool')
